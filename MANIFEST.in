@@ -1,0 +1,18 @@
+include MANIFEST.in
+include requirements.txt
+include *.json
+include *.md
+include *.py
+include *.txt
+recursive-include medical_app *.css
+recursive-include medical_app *.csv
+recursive-include medical_app *.html
+recursive-include medical_app *.ico
+recursive-include medical_app *.js
+recursive-include medical_app *.json
+recursive-include medical_app *.md
+recursive-include medical_app *.png
+recursive-include medical_app *.py
+recursive-include medical_app *.svg
+recursive-include medical_app *.txt
+recursive-exclude medical_app *.pyc
