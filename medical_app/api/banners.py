@@ -1,58 +1,44 @@
 import frappe
-import requests
 import time
+from medical_app.utils.image_utils import format_image_url
+from medical_app.utils.response_utils import response_util
 
 @frappe.whitelist()
 def get_all_banners():
- 
     try:
         # 1. Fetch all Doctor banners
         banners = frappe.get_all(
             "Doctor banners",
-            fields=["name", "banner_image"]
+            fields=["name", "banner_image", "banner_type"]
         )
 
         # Check if banners list is empty
         if not banners:
-            frappe.response['http_status_code'] = 404
-            return {
-                "status": "error",
-                "msg": "No banners found in the system.",
-                "Data": None
-            }
-        
+            return response_util(
+                status="error",
+                message="No banners found in the system.",
+                data=None,
+                http_status_code=404
+            )
 
-        # 2. Base URL for serving images (replace with your actual host)
-        system_host_url = "https://102.68.17.210"
-
-        # 3. Format each banner's image URL
+        # 2. Format each banner's image URL using the utility function
         for banner in banners:
-            if banner.banner_image:
-                # Ensure image starts with /files/
-                if not banner.banner_image.startswith('/files/'):
-                    banner.banner_image = f"/files/{banner.banner_image}"
-                
-                # Add cache-busting param
-                banner.banner_image = (
-                    f"{system_host_url}{banner.banner_image}?v={int(time.time())}"
-                )
-            else:
-                banner.banner_image = None
+            banner["banner_image"] = format_image_url(banner.get("banner_image"))
 
-        # 4. Return the banners data
-        frappe.response['http_status_code'] = 200
-        return {
-            "status": "success",
-            "msg": "Banners fetched successfully",
-            "Data": banners
-        }
+        # 3. Return the banners data using the response utility
+        return response_util(
+            status="success",
+            message="Banners fetched successfully",
+            data=banners,
+            http_status_code=200
+        )
 
     except Exception as e:
         frappe.log_error(frappe.get_traceback(), "Get All Doctor Banners Error")
-        frappe.response['http_status_code'] = 500
-        return {
-            "status": "error",
-            "msg": "An error occurred while fetching doctor banners.",
-            "Data": None,
-            "error": str(e),
-        }
+        return response_util(
+            status="error",
+            message="An error occurred while fetching doctor banners.",
+            data=None,
+            error=e,
+            http_status_code=500
+        )

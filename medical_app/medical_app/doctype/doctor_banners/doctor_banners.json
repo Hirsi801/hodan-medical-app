@@ -7,19 +7,29 @@
  "editable_grid": 1,
  "engine": "InnoDB",
  "field_order": [
-  "banner_image"
+  "banner_image",
+  "banner_type"
  ],
  "fields": [
   {
    "fieldname": "banner_image",
    "fieldtype": "Attach Image",
    "label": "banner_image"
+  },
+  {
+   "default": "Banner",
+   "fieldname": "banner_type",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Banner Type",
+   "options": "Banner\nService"
   }
  ],
  "image_field": "banner_image",
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-02-08 11:27:58.319092",
+ "modified": "2025-06-10 12:28:09.237231",
  "modified_by": "Administrator",
  "module": "medical app",
  "name": "Doctor banners",

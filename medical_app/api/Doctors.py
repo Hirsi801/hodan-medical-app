@@ -1,54 +1,55 @@
 import frappe
-import requests
-import time
+from medical_app.utils.image_utils import format_image_url
+from medical_app.utils.response_utils import response_util
 
 @frappe.whitelist()
 def get_all_doctors():
     try:
-        # Fetch all healthcare practitioners (doctors) with their name, charges, department, and image
+        # Fetch all active healthcare practitioners (doctors)
         doctors = frappe.get_all(
             "Healthcare Practitioner",
-            filters={"status": "Active",  "hide_dcotor": 0},
-            fields=["practitioner_name", "op_consulting_charge", "department", "image", "services" , "experience", "available_time"]
+            filters={"status": "Active", "hide_dcotor": 0},
+            fields=[
+                "name", 
+                "op_consulting_charge", 
+                "department", 
+                "image", 
+                "services",
+                "experience", 
+                "available_time"
+            ]
         )
 
         # Check if doctors list is empty
         if not doctors:
-            frappe.response['http_status_code'] = 404
-            return {
-                "status": "error",
-                "msg": "No doctors found in the system.",
-                "Data": None
-            }
+            return response_util(
+                status="error",
+                message="No doctors found in the system.",
+                data=None,
+                http_status_code=404
+            )
 
-        # Format the image URLs if available
-        system_host_url = "https://102.68.17.210"  # Replace with your actual host URL
+        # Format the image URLs using the utility function
         for doctor in doctors:
-            if doctor.image:
-                # Ensure image starts with /files/ and add a cache-busting query parameter
-                if not doctor.image.startswith('/files/'):
-                    doctor.image = f"/files/{doctor.image}"
-                doctor.image = f"{system_host_url}{doctor.image}?v={int(time.time())}"
-            else:
-                doctor.image = None  # If no image, set it to None
+            doctor["image"] = format_image_url(doctor.get("image"))
 
-        # Return the list of doctors with their formatted image URLs
-        frappe.response['http_status_code'] = 200
-        return {
-            "status": "success",
-            "Data": doctors
-        }
+        # Return the list of doctors
+        return response_util(
+            status="success",
+            message="Doctors fetched successfully",
+            data=doctors,
+            http_status_code=200
+        )
 
     except Exception as e:
         frappe.log_error(frappe.get_traceback(), "Get All Doctors Error")
-        frappe.response['http_status_code'] = 500
-        return {
-            "status": "error",
-            "msg": "An error occurred while fetching doctors.",
-            "error": str(e),
-            "Data": None
-        }
-
+        return response_util(
+            status="error",
+            message="An error occurred while fetching doctors.",
+            error=e,
+            data=None,
+            http_status_code=500
+        )
     
 @frappe.whitelist()
 def get_doctors_by_department(department):
