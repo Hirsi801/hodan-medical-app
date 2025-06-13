@@ -13,6 +13,7 @@ def response_util(status="success", message="", data=None, error=None, http_stat
     }
     
     if error:
-        response["error"] = str(error)
+        # response["error"] = str(error)
+        response["details"] = str(error)
     
     return response
