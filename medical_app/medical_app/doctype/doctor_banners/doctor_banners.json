@@ -14,7 +14,8 @@
   {
    "fieldname": "banner_image",
    "fieldtype": "Attach Image",
-   "label": "banner_image"
+   "label": "banner_image",
+   "reqd": 1
   },
   {
    "default": "Banner",
@@ -29,7 +30,7 @@
  "image_field": "banner_image",
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-06-10 12:28:09.237231",
+ "modified": "2025-06-28 14:23:13.557062",
  "modified_by": "Administrator",
  "module": "medical app",
  "name": "Doctor banners",
@@ -48,6 +49,7 @@
    "write": 1
   }
  ],
+ "quick_entry": 1,
  "sort_field": "modified",
  "sort_order": "DESC",
  "states": []

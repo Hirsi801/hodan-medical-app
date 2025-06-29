@@ -1,8 +1,85 @@
 import frappe
 from medical_app.utils.response_utils import response_util
 from medical_app.utils.image_utils import format_image_url
-from datetime import datetime
 
+
+@frappe.whitelist()
+def can_register_patient(full_name, mobile_number):
+    if not all([full_name, mobile_number]):
+        return response_util(
+            status="error",
+            message="Full name and mobile number are required.",
+            http_status_code=400
+        )
+
+    exists = frappe.db.exists("Patient", {"mobile_no": mobile_number,"first_name" : full_name})
+    if exists:
+        return response_util(
+            status="error",
+            message="This patient already exists.",
+            http_status_code=409
+        )
+
+    else:
+        return response_util(
+            status="success",
+            message="Patient not exist You can register",
+            data={"otp_sent": True},
+            http_status_code=200
+        )
+        
+
+@frappe.whitelist()
+def patient_login(mobile_number):
+    if not mobile_number:
+        return response_util(
+            status="error",
+            message="Mobile number is required!",
+            http_status_code=400
+        )
+
+    try:
+        patient = frappe.get_value(
+            "Patient",
+            {"mobile_no": mobile_number},
+            "name",
+            order_by="creation asc"
+        )
+
+        if patient:
+            patient_info = frappe.get_doc("Patient", patient)
+            
+            
+            return response_util(
+                status="success",
+                message="Login successful",
+                data={
+                    "patient_id": patient_info.name,
+                    "first_name": patient_info.first_name,
+                    "mobile": patient_info.mobile_no,
+                    "district": patient_info.territory,
+                    "age": patient_info.p_age,
+                    "Gender": patient_info.sex,
+                    "image": format_image_url(patient_info.get('image'))
+                },
+                http_status_code=200
+            )
+        else:
+            return response_util(
+                status="error",
+                message="Patient not found with the provided mobile number.",
+                http_status_code=404
+            )
+
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "Patient Login Error")
+        return response_util(
+            status="error",
+            message="An error occurred while logging in",
+            error=e,
+            http_status_code=500
+        )
+        
 
 @frappe.whitelist()
 def register_patient(pat_full_name, pat_gender, pat_age, pat_age_type, pat_mobile_number, pat_district):
@@ -46,56 +123,7 @@ def register_patient(pat_full_name, pat_gender, pat_age, pat_age_type, pat_mobil
             error=e,
             http_status_code=500
         )
-
-@frappe.whitelist()
-def patient_login(mobile_number):
-    if not mobile_number:
-        return response_util(
-            status="error",
-            message="Mobile number is required!",
-            http_status_code=400
-        )
-
-    try:
-        patient = frappe.get_value(
-            "Patient",
-            {"mobile_no": mobile_number},
-            "name",
-            order_by="creation asc"
-        )
-
-        if patient:
-            patient_info = frappe.get_doc("Patient", patient)
-            
-            return response_util(
-                status="success",
-                message="Login successful",
-                data={
-                    "patient_id": patient_info.name,
-                    "first_name": patient_info.first_name,
-                    "mobile": patient_info.mobile_no,
-                    "district": patient_info.territory,
-                    "age": patient_info.p_age,
-                    "Gender": patient_info.sex,
-                    "image": format_image_url(patient_info.get('image'))
-                },
-                http_status_code=200
-            )
-        else:
-            return response_util(
-                status="error",
-                message="Patient not found with the provided mobile number.",
-                http_status_code=404
-            )
-
-    except Exception as e:
-        frappe.log_error(frappe.get_traceback(), "Patient Login Error")
-        return response_util(
-            status="error",
-            message="An error occurred while logging in",
-            error=e,
-            http_status_code=500
-        )
+          
 
 @frappe.whitelist()
 def get_patients_with_same_mobile(mobile_number, doctor_name=None):
@@ -137,7 +165,7 @@ def get_patients_with_same_mobile(mobile_number, doctor_name=None):
             # Try to get the latest Fee Validity record
             fee_validity = frappe.get_all(
                 "Fee Validity",
-                filters={"patient": patient_id},
+                filters={"patient": patient_id, "practitioner" : doctor_name},
                 fields=["name", "start_date", "valid_till", "status"],
                 order_by="creation desc",
                 limit_page_length=1

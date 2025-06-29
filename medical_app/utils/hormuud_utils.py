@@ -13,13 +13,14 @@ redis = RedisWrapper()
 
 class HormuudSMS:
     def __init__(self):
-        self.config = frappe.get_cached_doc("Hormuud SMS Settings")
+        hormuud_username = "Hodanhospital"
+        hormuud_password = "fj8TVv9w9eLUyknMUhyQpQ=="
         
     def get_auth_token(self):
         """Get bearer token using username and password"""
         try:
             url = "https://smsapi.hormuud.com/token"
-            payload = f"grant_type=password&username={self.config.username}&password={self.config.password}"
+            payload = f"grant_type=password&username={self.hormuud_username}&password={self.hormuud_password}"
             headers = {'content-type': 'application/x-www-form-urlencoded'}
             
             response = requests.post(url, data=payload, headers=headers)

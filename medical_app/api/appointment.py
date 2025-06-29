@@ -2,7 +2,155 @@
 import frappe
 from medical_app.utils.response_utils import response_util
 from datetime import datetime
+from frappe import _
 
+
+@frappe.whitelist()
+def validate_appointment_booking(PID, doctor_practitioner, appointment_date):
+    try:
+        if not all([PID, doctor_practitioner, appointment_date]):
+            return response_util(
+                status="error",
+                message="PID, Doctor Practitioner, and Appointment Date are required.",
+                http_status_code=400
+            )
+
+        appointment_date_obj = datetime.strptime(appointment_date, "%Y-%m-%d").date()
+
+        # Check if patient exists
+        if not frappe.db.exists("Patient", PID):
+            return response_util(
+                status="error",
+                message=f"Patient with ID {PID} does not exist.",
+                http_status_code=404
+            )
+
+        # Check if doctor exists
+        if not frappe.db.exists("Healthcare Practitioner", doctor_practitioner):
+            return response_util(
+                status="error",
+                message=f"Doctor with ID {doctor_practitioner} does not exist.",
+                http_status_code=404
+            )
+
+        # ✅ Check for duplicate appointment
+        exists = frappe.db.exists("Que", {
+            "patient": PID,
+            "practitioner": doctor_practitioner,
+            "date": appointment_date,
+            "docstatus": ("<", 2)  # Draft or Submitted
+        })
+        if exists:
+            return response_util(
+                status="error",
+                message="An appointment for this patient with the same doctor on this date already exists.",
+                http_status_code=400
+            )
+      
+        # ✅ Check for duplicate appointment
+        queExist = frappe.db.exists("Que", {
+            "patient": PID,
+            "practitioner": doctor_practitioner,
+            "date": appointment_date,
+            "docstatus": ("<", 2)  # Draft or Submitted
+        })
+        if queExist:
+            return response_util(
+                status="error",
+                message="An appointment for this patient with the same doctor on this date already exists.",
+                http_status_code=400
+            )            
+
+        # Get patient's customer group
+        customer_group = frappe.db.get_value("Patient", PID, "customer_group")
+        # mobile = frappe.db.get_value("Patient", PID, "mobile")
+
+        # Get doctor consultation charge
+        doct_amount = frappe.db.get_value("Healthcare Practitioner", doctor_practitioner, "op_consulting_charge")
+        if doct_amount is None:
+            return response_util(
+                status="error",
+                message="Doctor's consultation charge is not set.",
+                http_status_code=400
+            )
+
+        original_amount = float(doct_amount)
+        payable_amount = original_amount
+        appointment_type = "New Patient"
+        is_follow_up = False
+
+        # Check follow-up eligibility
+        fee_validity = frappe.get_all(
+            "Fee Validity",
+            filters={
+                "patient": PID,
+                "practitioner": doctor_practitioner,
+                "status": "Pending"
+            },
+            fields=["name", "valid_till", "visited", "max_visits"],
+            order_by="creation desc",
+            limit_page_length=1
+        )
+
+        if fee_validity:
+            fee_validity = fee_validity[0]
+            valid_till = datetime.strptime(str(fee_validity.valid_till), "%Y-%m-%d").date()
+
+            if appointment_date_obj <= valid_till and fee_validity.visited < fee_validity.max_visits:
+                payable_amount = 0
+                appointment_type = "Follow Up"
+                is_follow_up = True
+
+        # elif customer_group == "Membership":
+        if not is_follow_up and customer_group == "Membership":
+            payable_amount = original_amount * 0.5
+
+        # ✅ Simulate creation to trigger internal validations
+        temp_doc = frappe.new_doc("Que")
+        temp_doc.update({
+            "patient": PID,
+            "practitioner": doctor_practitioner,
+            "date": appointment_date,
+            "payable_amount": payable_amount,
+            "mode_of_payment": "Cash",
+            "cost_center": "Main - HH",
+            "appointment_source": "Mobile-App",
+            "que_type": appointment_type,
+            "follow_up": is_follow_up,
+        })
+        temp_doc.run_method("validate")  # Internal field-level validation
+
+        return response_util(
+            status="success",
+            message="Patient is eligible to book appointment.",
+            data={
+                "appointment_type": appointment_type,
+                "payable_amount": payable_amount,
+                "original_amount": original_amount,
+                "is_follow_up": is_follow_up,
+                "customer_group" : customer_group
+            },
+            http_status_code=200
+        )
+
+    except frappe.ValidationError as ve:
+        return response_util(
+            status="error",
+            message="Validation failed during appointment simulation.",
+            error=str(ve),
+            http_status_code=400
+        )
+
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "Validate Appointment Booking Error")
+        return response_util(
+            status="error",
+            message="Unexpected error while validating appointment booking.",
+            error=str(e),
+            http_status_code=500
+        )
+  
+  
 @frappe.whitelist()
 def create_appointment(PID, doctor_practitioner, 
                     #    doct_amount, 
@@ -21,23 +169,6 @@ def create_appointment(PID, doctor_practitioner,
             )
         
         appointment_date_obj = datetime.strptime(appointment_date, "%Y-%m-%d").date()
-        # Check appointment date is not in the past
-        # try:
-            # appointment_date_obj = datetime.strptime(appointment_date, "%Y-%m-%d").date()
-        #     if appointment_date_obj < datetime.now().date():
-        #         return response_util(
-        #             status="error",
-        #             message="Appointment date cannot be in the past.",
-        #             data=None,
-        #             http_status_code=400
-        #         )
-        # except ValueError:
-        #     return response_util(
-        #         status="error",
-        #         message="Invalid appointment date format. Use YYYY-MM-DD.",
-        #         data=None,
-        #         http_status_code=400
-        #     ) 
 
         # Check if patient exists
         if not frappe.db.exists("Patient", PID):
@@ -92,11 +223,6 @@ def create_appointment(PID, doctor_practitioner,
                 appointment_type = "Follow Up"
                 is_follow_up = True
                 
-                # Update fee validity
-                frappe.db.set_value("Fee Validity", fee_validity.name, "visited", fee_validity.visited + 1)
-                if fee_validity.visited + 1 >= fee_validity.max_visits:
-                    frappe.db.set_value("Fee Validity", fee_validity.name, "status", "Completed")
-        
         # Priority 2: Apply 50% discount for Membership patients (if not follow-up)
         elif customer_group == "Membership":
             payable_amount = original_amount * 0.5
@@ -117,7 +243,7 @@ def create_appointment(PID, doctor_practitioner,
         
         appointment.insert()
         frappe.db.commit()
-
+        
         return response_util(
             status="success",
             message="Appointment created successfully",
@@ -139,6 +265,7 @@ def create_appointment(PID, doctor_practitioner,
             data=None,
             http_status_code=500
         )      
+        
         
 @frappe.whitelist()
 def get_appointments(mobile_no=None):
